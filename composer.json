@@ -1,0 +1,38 @@
+{
+    "type": "library",
+    "name": "mcaskill/wp-ecocide",
+    "description": "A collection of modules to modify or disable features in WordPress.",
+    "keywords": [ "wordpress", "bloat", "disable", "clean", "hide" ],
+    "homepage": "https://github.com/mcaskill/wp-ecocide",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Chauncey McAskill",
+            "homepage": "https://mcaskill.ca/"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/mcaskill/wp-ecocide/issues"
+    },
+    "require": {
+        "php": ">=7.0"
+    },
+    "require-dev": {
+        "automattic/phpcs-neutron-ruleset": "^3.2",
+        "dealerdirect/phpcodesniffer-composer-installer": "^0.6.2",
+        "squizlabs/php_codesniffer": "^3.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ecocide\\": "src/"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "1.x-dev"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
