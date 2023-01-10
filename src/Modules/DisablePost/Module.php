@@ -48,6 +48,8 @@ class Module implements \Ecocide\Contracts\Modules\Module
         add_filter( 'post_rewrite_rules', '__return_empty_array', 50 );
         add_filter( 'date_rewrite_rules', '__return_empty_array', 50 );
 
+        add_filter( 'rest_url', [ $this, 'filter_rest_url' ], 50, 2 );
+
         add_filter( 'register_post_type_args', [ $this, 'register_post_type_args' ], 50, 2 );
 
         if ( is_admin() ) {
@@ -55,6 +57,55 @@ class Module implements \Ecocide\Contracts\Modules\Module
         } else {
             add_action( 'pre_get_posts', [ $this, 'disallow_query_posts' ] );
         }
+    }
+
+    /**
+     * Customizes the REST URL to test for REST API availability.
+     *
+     * If this filter is triggered from {@see \WP_Site_Health::get_test_rest_availability()}
+     * and the route is `wp/v2/types/post`, apply a {@event filter:ecocide/modules/disable_post/test_rest_availability_url filter}
+     * to change the test URL.
+     *
+     * This hack should be deprecated if ever {@see https://core.trac.wordpress.org/ticket/57440 #57440}
+     * is merged and released.
+     *
+     * @listens WP#filter:rest_url
+     *
+     * @param  string $url  REST URL.
+     * @param  string $path REST route.
+     * @return string $url
+     */
+    public function filter_rest_url( string $url, string $path ) : string
+    {
+        if ( '/wp/v2/types/post' !== $path ) {
+            return $url;
+        }
+
+        $trace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 7 );
+        foreach ( $trace as $step ) {
+            if ( ! isset( $step['function'], $step['class'] ) ) {
+                continue;
+            }
+
+            if (
+                'get_test_rest_availability' !== $step['function'] ||
+                'WP_Site_Health' !== $step['class']
+            ) {
+                continue;
+            }
+
+            /**
+             * Filters the URL to replace the author's page.
+             *
+             * @event Ecocide#filter:ecocide/modules/disable_post/test_rest_availability_url
+             *
+             * @param string $url  REST URL.
+             * @param string $path REST route.
+             */
+            return apply_filters( static::EVENT_PREFIX . 'test_rest_availability_url', $url, $path );
+        }
+
+        return $url;
     }
 
     /**
