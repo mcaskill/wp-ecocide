@@ -21,7 +21,7 @@ Ecocide isn't started until an instance of its `Ecocide\Modules` class is create
 ```php
 $ecocide = new \Ecocide\Modules();
 
-$ecocide->boot('disable-author-template');
+$ecocide->get('disable-author-template')->boot();
 ```
 
 ## License
