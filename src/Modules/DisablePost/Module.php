@@ -54,6 +54,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
 
         if ( is_admin() ) {
             add_action( 'admin_menu', [ $this, 'disallow_admin_posts' ] );
+            add_action( 'wp_dashboard_setup', [ $this, 'filter_dashboard' ] );
         } else {
             add_action( 'pre_get_posts', [ $this, 'disallow_query_posts' ] );
         }
@@ -133,6 +134,21 @@ class Module implements \Ecocide\Contracts\Modules\Module
         }
 
         return $args;
+    }
+
+    /**
+     * Unregisters the default WordPress Quick Press and Recent Drafts dashboard widgets.
+     *
+     * @see \wp_dashboard_setup()
+     *
+     * @listens WP#action:wp_dashboard_setup
+     *
+     * @return void
+     */
+    public function filter_dashboard() : void
+    {
+        remove_meta_box('dashboard_quick_press',   'dashboard', 'side');
+        remove_meta_box('dashboard_recent_drafts', 'dashboard', 'side');
     }
 
     /**
