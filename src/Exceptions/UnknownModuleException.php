@@ -14,6 +14,6 @@ class UnknownModuleException extends \InvalidArgumentException
      */
     public function __construct( $id )
     {
-        parent::__construct( sprintf( 'Module "%s" is not defined.', $id ) );
+        parent::__construct( sprintf( 'Module "%s" is not defined', $id ) );
     }
 }
