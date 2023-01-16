@@ -54,6 +54,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
 
         if ( is_admin() ) {
             add_action( 'admin_menu', [ $this, 'disallow_admin_posts' ] );
+            add_action( 'wp_dashboard_setup', [ $this, 'disable_dashboard_widgets' ], 50 );
         } else {
             add_action( 'pre_get_posts', [ $this, 'disallow_query_posts' ] );
         }
@@ -133,6 +134,26 @@ class Module implements \Ecocide\Contracts\Modules\Module
         }
 
         return $args;
+    }
+
+    /**
+     * Disable Quick Press and Recent Drafts dashboard widgets.
+     *
+     * @see https://digwp.com/2014/02/disable-default-dashboard-widgets/
+     *
+     * @listens WP#action:wp_dashboard_setup
+     *
+     * @global array<string, mixed> $wp_meta_boxes
+     *
+     * @return void
+     */
+    public function disable_dashboard_widgets(): void
+    {
+        global $wp_meta_boxes;
+
+        // WordPress
+        unset( $wp_meta_boxes['dashboard']['side']['core']['dashboard_quick_press'] );
+        unset( $wp_meta_boxes['dashboard']['side']['core']['dashboard_recent_drafts'] );
     }
 
     /**
