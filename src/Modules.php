@@ -13,6 +13,13 @@ use Ecocide\Exceptions\UnknownModuleException;
 class Modules
 {
     /**
+     * Map of module instances.
+     *
+     * @var array<string, Module>
+     */
+    protected $modules = [];
+
+    /**
      * The cache of studly-cased words.
      *
      * @var array
@@ -22,9 +29,22 @@ class Modules
     /**
      * @param  string $id The module identifier.
      * @return Module
-     * @tbrows UnknownModuleException If the module identifier is not found.
      */
     public function get( string $id ) : Module
+    {
+        if ( isset( $this->modules[ $id ] ) ) {
+            return $this->modules;
+        }
+
+        return $this->modules[ $id ] = $this->find( $id );
+    }
+
+    /**
+     * @param  string $id The module identifier.
+     * @return Module
+     * @tbrows UnknownModuleException If the module identifier is not found.
+     */
+    protected function find( string $id ) : Module
     {
         $name  = self::studly( $id );
         $class = 'Ecocide\\Modules\\' . $name . '\\Module';
