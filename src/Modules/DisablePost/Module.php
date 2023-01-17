@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ecocide\Modules\DisablePost;
 
+use Ecocide\Module;
 use WP_Query;
 
 /**
@@ -20,150 +21,87 @@ use WP_Query;
  *     - mcaskill/wp-disable-posts
  * @copyright  Tony Kwon
  * @license    https://github.com/tonykwon/wp-disable-posts/blob/master/LICENSE GPLv2
+ *
+ * @psalm-import-type HookActiveState from \Ecocide\Contracts\Modules\Module
  */
-class Module implements \Ecocide\Contracts\Modules\Module
+class Module extends BaseModule
 {
-    const EVENT_PREFIX = 'ecocide/modules/disable_post/';
+    public const HOOK_PREFIX = BaseModule::HOOK_PREFIX . 'disable_post/';
 
     /**
-     * A reference to an instance of this class.
+     * {@inheritdoc}
      *
-     * @var static
-     */
-    private static $instance;
-
-    /**
-     * Boots the module.
+     * @param  array $options {
+     *     An associative array of options to customize the module.
      *
-     * @access public
-     * @param  array $args {
-     *     An array of optional arguments to customize the module.
-     *
-     *     @type array $hooks TODO: Define customizable hooks.
+     *     @type HookActiveState $dashboard_widgets {
+     *         @type HookActiveState $quick_press             Disable Quick Press widget.
+     *         @type HookActiveState $recent_drafts           Disable Recent Drafts widget.
+     *     }
+     *     @type HookActiveState $hooks {
+     *         @type HookActiveState $admin_menu              Disable access to admin edit pages.
+     *         @type HookActiveState $date_rewrite_rules      Disable date routes.
+     *         @type HookActiveState $post_rewrite_rules      Disable post routes.
+     *         @type HookActiveState $pre_get_posts           Exclude 'post' post type in {@see \WP_Query}.
+     *         @type HookActiveState $register_post_type_args Disable the post type.
+     *         @type HookActiveState $rest_availability_url   Replace the REST API URL for the REST API availability health check.
+     *         @type HookActiveState $rewrite_rules           Disable all post-related routes.
+     *         @type HookActiveState $wp_dashboard_setup      Disable admin dashboard widgets.
+     *     }
      * }
      * @return void
      */
-    public function boot( array $args = [] ) : void
+    public function boot( array $options = [] ) : void
     {
-        add_filter( 'post_rewrite_rules', '__return_empty_array', 50 );
-        add_filter( 'date_rewrite_rules', '__return_empty_array', 50 );
+        if ( $this->is_booted() ) {
+            return;
+        }
 
-        add_filter( 'rest_url', [ $this, 'filter_rest_url' ], 50, 2 );
+        $this->booted = true;
 
-        add_filter( 'register_post_type_args', [ $this, 'register_post_type_args' ], 50, 2 );
+        $this->options = $options;
+
+        if ( $args['hooks']['register_post_type_args'] ) {
+            add_filter( 'register_post_type_args', [ $this, 'filter_register_post_type_args' ], 50, 2 );
+        }
+
+        if ( $args['hooks']['rest_availability_url'] ) {
+            add_filter( 'rest_url', [ $this, 'filter_rest_url' ], 50, 2 );
+        }
+
+        if ( $args['hooks']['rewrite_rules'] ) {
+            if ( $args['hooks']['date_rewrite_rules'] ) {
+                add_filter( 'date_rewrite_rules', '__return_empty_array', 50 );
+            }
+
+            if ( $args['hooks']['post_rewrite_rules'] ) {
+                add_filter( 'post_rewrite_rules', '__return_empty_array', 50 );
+            }
+        }
 
         if ( is_admin() ) {
-            add_action( 'admin_menu', [ $this, 'disallow_admin_posts' ] );
-            add_action( 'wp_dashboard_setup', [ $this, 'disable_dashboard_widgets' ], 50 );
+            if ( $args['hooks']['admin_menu'] ) {
+                add_action( 'admin_menu', [ $this, 'action_admin_menu' ] );
+            }
+
+            if ( $args['hooks']['wp_dashboard_setup'] ) {
+                add_action( 'wp_dashboard_setup', [ $this, 'remove_dashboard_widgets' ], 50 );
+            }
         } else {
-            add_action( 'pre_get_posts', [ $this, 'disallow_query_posts' ] );
-        }
-    }
-
-    /**
-     * Customizes the REST URL to test for REST API availability.
-     *
-     * If this filter is triggered from {@see \WP_Site_Health::get_test_rest_availability()}
-     * and the route is `wp/v2/types/post`, apply a {@event filter:ecocide/modules/disable_post/test_rest_availability_url filter}
-     * to change the test URL.
-     *
-     * This hack should be deprecated if ever {@see https://core.trac.wordpress.org/ticket/57440 #57440}
-     * is merged and released.
-     *
-     * @listens WP#filter:rest_url
-     *
-     * @param  string $url  REST URL.
-     * @param  string $path REST route.
-     * @return string $url
-     */
-    public function filter_rest_url( string $url, string $path ) : string
-    {
-        if ( '/wp/v2/types/post' !== $path ) {
-            return $url;
-        }
-
-        $trace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 7 );
-        foreach ( $trace as $step ) {
-            if ( ! isset( $step['function'], $step['class'] ) ) {
-                continue;
+            if ( $args['hooks']['pre_get_posts'] ) {
+                add_action( 'pre_get_posts', [ $this, 'action_pre_get_posts' ] );
             }
-
-            if (
-                'get_test_rest_availability' !== $step['function'] ||
-                'WP_Site_Health' !== $step['class']
-            ) {
-                continue;
-            }
-
-            /**
-             * Filters the URL to replace the author's page.
-             *
-             * @event Ecocide#filter:ecocide/modules/disable_post/test_rest_availability_url
-             *
-             * @param string $url  REST URL.
-             * @param string $path REST route.
-             */
-            return apply_filters( static::EVENT_PREFIX . 'test_rest_availability_url', $url, $path );
         }
-
-        return $url;
     }
 
     /**
-     * Disables public access, querying, and UI to the 'post' post type.
+     * Denies access if attempting to view 'post' post type in Admin.
      *
-     * @listens WP#filter:register_post_type_args
-     *
-     * @param  array  $args      Array of arguments for registering a post type.
-     * @param  string $post_type Post type key.
-     * @return array  $args
-     */
-    public function register_post_type_args( array $args, string $post_type ) : array
-    {
-        if ( 'post' === $post_type ) {
-            $args = array_merge( $args, [
-                'public'               => false,
-                'show_ui'              => false,
-                'show_in_rest'         => false,
-                'show_in_menu'         => false,
-                'show_in_admin_bar'    => false,
-                'show_in_nav_menus'    => false,
-                'publicly_queryable'   => false,
-                'exclude_from_search'  => false,
-            ] );
-        }
-
-        return $args;
-    }
-
-    /**
-     * Disable Quick Press and Recent Drafts dashboard widgets.
-     *
-     * @see https://digwp.com/2014/02/disable-default-dashboard-widgets/
-     *
-     * @listens WP#action:wp_dashboard_setup
-     *
-     * @global array<string, mixed> $wp_meta_boxes
+     * @listens action:admin_menu
      *
      * @return void
      */
-    public function disable_dashboard_widgets(): void
-    {
-        global $wp_meta_boxes;
-
-        // WordPress
-        unset( $wp_meta_boxes['dashboard']['side']['core']['dashboard_quick_press'] );
-        unset( $wp_meta_boxes['dashboard']['side']['core']['dashboard_recent_drafts'] );
-    }
-
-    /**
-     * Die if attempting to view 'post' post type in Admin.
-     *
-     * @listens WP#action:admin_menu
-     *
-     * @return void
-     */
-    public function disallow_admin_posts() : void
+    public function action_admin_menu() : void
     {
         global $pagenow;
 
@@ -180,12 +118,12 @@ class Module implements \Ecocide\Contracts\Modules\Module
     /**
      * Excludes post type 'post' to be returned from search.
      *
-     * @listens WP#action:pre_get_posts
+     * @listens action:pre_get_posts
      *
      * @param  WP_Query $wp_query The query object (passed by reference).
      * @return void
      */
-    public function disallow_query_posts( WP_Query $wp_query ) : void
+    public function action_pre_get_posts( WP_Query $wp_query ) : void
     {
         if ( ! is_search() || ! $wp_query->is_main_query() ) {
             return;
@@ -211,32 +149,98 @@ class Module implements \Ecocide\Contracts\Modules\Module
     }
 
     /**
-     * Returns the instance of the module.
+     * Disables public access, querying, and UI to the 'post' post type.
      *
-     * @access public
-     * @return static
+     * @listens filter:register_post_type_args
+     *
+     * @param  array  $args      Array of arguments for registering a post type.
+     * @param  string $post_type Post type key.
+     * @return array  $args
      */
-    public static function get_instance()
+    public function filter_register_post_type_args( array $args, string $post_type ) : array
     {
-        // If the single instance hasn't been set, set it now.
-        if ( null === static::$instance ) {
-            static::$instance = new static;
+        if ( 'post' !== $post_type ) {
+            return $args;
         }
 
-        return static::$instance;
+        return array_replace( $args, [
+            'exclude_from_search'  => false,
+            'public'               => false,
+            'publicly_queryable'   => false,
+            'show_in_admin_bar'    => false,
+            'show_in_menu'         => false,
+            'show_in_nav_menus'    => false,
+            'show_in_rest'         => false,
+            'show_ui'              => false,
+        ] );
     }
 
     /**
-     * Calls the requested method from the module.
+     * Allows the REST URL to test for REST API availability to be customized.
      *
-     * @param  string  $method The method to ne called.
-     * @param  array   $args   Zero or more parameters to be passed to the method.
-     * @return mixed
+     * If this filter is triggered from {@see \WP_Site_Health::get_test_rest_availability()}
+     * and the route is `wp/v2/types/post`, apply a {@event filter:ecocide/modules/disable_post/test_rest_availability_url filter}
+     * to change the test URL.
+     *
+     * This hack should be deprecated if ever {@see https://core.trac.wordpress.org/ticket/57440 #57440}
+     * is merged and released.
+     *
+     * @listens filter:rest_url
+     *
+     * @param  string $url  REST URL.
+     * @param  string $path REST route.
+     * @return string $url
      */
-    public static function __callStatic( $method, $args )
+    public function filter_rest_url( string $url, string $path ) : string
     {
-        $instance = static::get_instance();
+        if ( '/wp/v2/types/post' !== $path ) {
+            return $url;
+        }
 
-        return $instance ? $instance->$method( ...$args ) : null;
+        $trace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 7 );
+        foreach ( $trace as $step ) {
+            if ( ! isset( $step['function'], $step['class'] ) ) {
+                continue;
+            }
+
+            if (
+                'get_test_rest_availability' !== $step['function'] ||
+                'WP_Site_Health' !== $step['class']
+            ) {
+                continue;
+            }
+
+            /**
+             * Filters the REST API URL for the REST API availability health check.
+             *
+             * @event filter:ecocide/modules/disable_post/test_rest_availability_url
+             *
+             * @param string $url  REST URL.
+             * @param string $path REST route.
+             */
+            return apply_filters( static::HOOK_PREFIX . 'test_rest_availability_url', $url, $path );
+        }
+
+        return $url;
+    }
+
+    /**
+     * Unregisters the default WordPress Quick Press and Recent Drafts dashboard widgets.
+     *
+     * @see \wp_dashboard_setup()
+     *
+     * @listens action:wp_dashboard_setup
+     *
+     * @return void
+     */
+    public function remove_dashboard_widgets(): void
+    {
+        if ( $this->$this->options['dashboard_widgets']['quick_press'] ) {
+            remove_meta_box('dashboard_quick_press',   'dashboard', 'side');
+        }
+
+        if ( $this->$this->options['dashboard_widgets']['recent_drafts'] ) {
+            remove_meta_box('dashboard_recent_drafts', 'dashboard', 'side');
+        }
     }
 }

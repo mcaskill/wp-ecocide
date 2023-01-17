@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ecocide\Modules\DisableComments;
 
+use Ecocide\Module;
 use WP_Admin_Bar;
 
 /**
@@ -17,79 +18,132 @@ use WP_Admin_Bar;
  * @version    1.10.2 solarissmoke/disable-comments
  * @copyright  Samir Shah
  * @license    https://github.com/solarissmoke/disable-comments/blob/master/LICENSE GPLv2
+ *
+ * @psalm-import-type HookActiveState from \Ecocide\Contracts\Modules\Module
  */
-class Module implements \Ecocide\Contracts\Modules\Module
+class Module extends BaseModule
 {
-    const EVENT_PREFIX = 'ecocide/modules/disable_comments/';
+    public const HOOK_PREFIX = BaseModule::HOOK_PREFIX . 'disable_comments/';
 
     /**
-     * A reference to an instance of this class.
+     * {@inheritdoc}
      *
-     * @var static
-     */
-    private static $instance;
-
-    /**
-     * Boots the module.
+     * @param  array $options {
+     *     An associative array of options to customize the module.
      *
-     * @access public
-     * @param  array $args {
-     *     An array of optional arguments to customize the module.
-     *
-     *     @type array $hooks TODO: Define customizable hooks.
+     *     @type HookActiveState $dashboard_widgets {
+     *         @type HookActiveState $recent_comments Disable Recent Comments widget.
+     *     }
+     *     @type HookActiveState $hooks {
+     *         @type HookActiveState $ .
+     *         @type HookActiveState $rewrite_rules Disable all comment-related routes.
+     *     }
      * }
      * @return void
      */
-    public function boot( array $args = [] ) : void
+    public function boot( array $options = [] ) : void
     {
-        add_filter( 'wp_headers', [ $this, 'filter_wp_headers' ] );
+        if ( $this->is_booted() ) {
+            return;
+        }
 
-        add_action( 'widgets_init', [ $this, 'filter_widgets' ] );
+        $this->booted = true;
 
-        add_action( 'add_admin_bar_menus', [ $this, 'filter_admin_bar' ] );
+        $this->options = $options;
 
-        add_filter( 'rest_endpoints', [ $this, 'filter_rest_endpoints' ] );
+        if ( $args['hooks']['wp_headers'] ) {
+            add_filter( 'wp_headers', [ $this, 'filter_wp_headers' ] );
+        }
 
-        add_filter( 'comments_array', '__return_empty_array', 99 );
+        if ( $args['hooks']['widgets_init'] ) {
+            add_action( 'widgets_init', [ $this, 'filter_widgets_init' ] );
+        }
 
-        add_filter( 'comments_open', '__return_false', 99 );
+        if ( $args['hooks']['add_admin_bar_menus'] ) {
+            add_action( 'add_admin_bar_menus', [ $this, 'filter_add_admin_bar_menus' ] );
+        }
 
-        add_filter( 'pings_open', '__return_false', 99 );
+        if ( $args['hooks']['rest_endpoints'] ) {
+            add_filter( 'rest_endpoints', [ $this, 'filter_rest_endpoints' ] );
+        }
 
-        add_filter( 'get_comments_number', '__return_zero', 99 );
+        if ( $args['hooks']['comments_array'] ) {
+            add_filter( 'comments_array', '__return_empty_array', 99 );
+        }
 
-        add_filter( 'comments_rewrite_rules', '__return_empty_array', 99 );
+        if ( $args['hooks']['comments_open'] ) {
+            add_filter( 'comments_open', '__return_false', 99 );
+        }
 
-        add_filter( 'rewrite_rules_array', [ $this, 'filter_rewrite_rules' ], 99 );
+        if ( $args['hooks']['pings_open'] ) {
+            add_filter( 'pings_open', '__return_false', 99 );
+        }
 
-        add_action( 'wp_loaded', [ $this, 'filter_post_type_support' ] );
+        if ( $args['hooks']['get_comments_number'] ) {
+            add_filter( 'get_comments_number', '__return_zero', 99 );
+        }
 
-        remove_action( 'init', 'register_block_core_latest_comments' );
+        if ( $args['hooks']['rewrite_rules'] ) {
+            if ( $args['hooks']['comments_rewrite_rules'] ) {
+                add_filter( 'comments_rewrite_rules', '__return_empty_array', 99 );
+            }
+
+            if ( $args['hooks']['rewrite_rules_array'] ) {
+                add_filter( 'rewrite_rules_array', [ $this, 'filter_rewrite_rules_array' ], 99 );
+            }
+        }
+
+        if ( $args['hooks']['remove_post_type_support'] ) {
+            add_action( 'wp_loaded', [ $this, 'remove_post_type_support' ] );
+        }
+
+        if ( $args['hooks']['register_block_core_latest_comments'] ) {
+            remove_action( 'init', 'register_block_core_latest_comments' );
+        }
 
         if ( is_admin() ) {
             // Delay action as late as possible
-            add_action( 'admin_menu', [ $this, 'filter_admin_menu' ], 99 );
+            if ( $args['hooks']['admin_menu'] ) {
+                add_action( 'admin_menu', [ $this, 'filter_admin_menu' ], 99 );
+            }
 
-            add_action( 'admin_print_styles-index.php', [ $this, 'admin_css' ] );
+            if ( $args['hooks']['hide_admin_comments'] ) {
+                add_action( 'admin_print_styles-index.php',   [ $this, 'display_css_to_hide_admin_comments' ] );
+                add_action( 'admin_print_styles-profile.php', [ $this, 'display_css_to_hide_admin_comments' ] );
+            }
 
-            add_action( 'admin_print_styles-profile.php', [ $this, 'admin_css' ] );
+            if ( $args['hooks']['wp_dashboard_setup'] ) {
+                add_action( 'wp_dashboard_setup', [ $this, 'remove_dashboard_widgets' ] );
+            }
 
-            add_action( 'wp_dashboard_setup', [ $this, 'filter_dashboard' ] );
-
-            add_filter( 'pre_option_default_pingback_flag', '__return_zero' );
+            if ( $args['hooks']['pre_option_default_pingback_flag'] ) {
+                add_filter( 'pre_option_default_pingback_flag', '__return_zero' );
+            }
         } else {
             // Ensure action fires before 'redirect_canonical'
-            add_action( 'template_redirect', [ $this, 'disable_comment_feed' ], 9 );
+            if ( $args['hooks']['template_redirect'] ) {
+                add_action( 'template_redirect', [ $this, 'disable_comment_feed' ], 9 );
+            }
 
-            add_action( 'template_redirect', [ $this, 'check_comment_template' ] );
+            if ( $args['hooks']['template_redirect'] ) {
+                add_action( 'template_redirect', [ $this, 'check_comment_template' ] );
+            }
 
-            add_filter( 'post_comments_feed_link', '__return_false' );
+            if ( $args['hooks']['post_comments_feed_link'] ) {
+                add_filter( 'post_comments_feed_link', '__return_false' );
+            }
 
-            add_filter( 'comments_link_feed', '__return_false' );
+            if ( $args['hooks']['comments_link_feed'] ) {
+                add_filter( 'comments_link_feed', '__return_false' );
+            }
 
-            add_filter( 'comment_link', '__return_false' );
+            if ( $args['hooks']['comment_link'] ) {
+                add_filter( 'comment_link', '__return_false' );
+            }
 
-            add_filter( 'feed_links_show_comments_feed', '__return_false' );
+            if ( $args['hooks']['feed_links_show_comments_feed'] ) {
+                add_filter( 'feed_links_show_comments_feed', '__return_false' );
+            }
         }
     }
 
@@ -98,7 +152,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see wp-includes/template-loader.php
      *
-     * @listens WP#action:template_redirect
+     * @listens action:template_redirect
      *
      * @return void
      */
@@ -121,7 +175,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see \WP::send_headers()
      *
-     * @listens WP#filter:wp_headers
+     * @listens filter:wp_headers
      *
      * @param  string[] $headers Associative array of HTTP headers to be sent.
      * @return string[]
@@ -137,7 +191,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see \WP_REST_Server::get_routes()
      *
-     * @listens WP#filter:rest_endpoints
+     * @listens filter:rest_endpoints
      *
      * @param  string[] $endpoints Associative array of available REST endpoints.
      * @return string[]
@@ -153,12 +207,12 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see \WP_Rewrite::rewrite_rules()
      *
-     * @listens WP#filter:rewrite_rules_array
+     * @listens filter:rewrite_rules_array
      *
      * @param  string[] $rules The compiled array of rewrite rules, keyed by their regex pattern.
      * @return string[]
      */
-    public function filter_rewrite_rules( array $rules ) : array
+    public function filter_rewrite_rules_array( array $rules ) : array
     {
         foreach ( $rules as $pattern => $rewrite ) {
             if ( preg_match( '/[\?&]cpage=\$matches\[/', $rewrite ) ) {
@@ -174,7 +228,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see wp-includes/template-loader.php
      *
-     * @listens WP#action:template_redirect
+     * @listens action:template_redirect
      *
      * @return void
      */
@@ -192,11 +246,11 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see \wp_widgets_init()
      *
-     * @listens WP#action:widgets_init
+     * @listens action:widgets_init
      *
      * @return void
      */
-    public function filter_widgets() : void
+    public function filter_widgets_init() : void
     {
         unregister_widget( 'WP_Widget_Recent_Comments' );
 
@@ -212,25 +266,27 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see \wp_dashboard_setup()
      *
-     * @listens WP#action:wp_dashboard_setup
+     * @listens action:wp_dashboard_setup
      *
      * @return void
      */
-    public function filter_dashboard() : void
+    public function remove_dashboard_widgets() : void
     {
-        remove_meta_box( 'dashboard_recent_comments', 'dashboard', 'normal' );
+        if ( $this->$this->options['dashboard_widgets']['recent_comments'] ) {
+            remove_meta_box( 'dashboard_recent_comments', 'dashboard', 'normal' );
+        }
     }
 
     /**
-     * Injects CSS to hide comment-related components.
+     * Outputs CSS to hide comment-related components.
      *
      * @see wo-admin/admin-header.php
      *
-     * @listens WP#action:admin_print_styles-{$hook_suffix}
+     * @listens action:admin_print_styles-{$hook_suffix}
      *
      * @return void
      */
-    public function admin_css() : void
+    public function display_css_to_hide_admin_comments() : void
     {
         $styles  = '<style>';
         $styles .= '#dashboard_right_now .comment-count, ';
@@ -250,7 +306,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
      * @see wp-admin/includes/menu.php
      * @see wp-admin/menu.php
      *
-     * @listens WP#action:admin_menu
+     * @listens action:admin_menu
      *
      * @return void
      */
@@ -272,11 +328,11 @@ class Module implements \Ecocide\Contracts\Modules\Module
      * @see \WP_Admin_Bar::add_menus()
      * @see \wp_admin_bar_comments_menu()
      *
-     * @listens WP#action:add_admin_bar_menus
+     * @listens action:add_admin_bar_menus
      *
      * @return void
      */
-    public function filter_admin_bar() : void
+    public function filter_add_admin_bar_menus() : void
     {
         remove_action( 'admin_bar_menu', 'wp_admin_bar_comments_menu', 60 );
 
@@ -290,7 +346,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see \WP_Admin_Bar::add_menus()
      *
-     * @listens WP#action:add_admin_bar_menus
+     * @listens action:add_admin_bar_menus
      *
      * @param  WP_Admin_Bar $wp_admin_bar The WordPress Admin Bar.
      * @return void
@@ -309,11 +365,11 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see wp-settings.php
      *
-     * @listens WP#action:wp_loaded
+     * @listens action:wp_loaded
      *
      * @return void
      */
-    public function filter_post_type_support() : void
+    public function remove_post_type_support() : void
     {
         $post_types = array_keys( get_post_types( [ 'public' => true ], 'objects' ) );
         if ( ! empty( $post_types ) ) {
@@ -334,35 +390,5 @@ class Module implements \Ecocide\Contracts\Modules\Module
     public static function dummy_comments_template() : string
     {
         return __DIR__ . '/noop.php';
-    }
-
-    /**
-     * Returns the instance of the module.
-     *
-     * @access public
-     * @return static
-     */
-    public static function get_instance()
-    {
-        // If the single instance hasn't been set, set it now.
-        if ( null === static::$instance ) {
-            static::$instance = new static;
-        }
-
-        return static::$instance;
-    }
-
-    /**
-     * Calls the requested method from the module.
-     *
-     * @param  string  $method The method to ne called.
-     * @param  array   $args   Zero or more parameters to be passed to the method.
-     * @return mixed
-     */
-    public static function __callStatic( $method, $args )
-    {
-        $instance = static::get_instance();
-
-        return $instance ? $instance->$method( ...$args ) : null;
     }
 }

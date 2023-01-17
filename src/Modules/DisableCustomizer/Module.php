@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Ecocide\Modules\DisableCustomizer;
 
+use Ecocide\Module;
+
 /**
  * Disable WordPress Customizer
  *
@@ -11,30 +13,24 @@ namespace Ecocide\Modules\DisableCustomizer;
  * @version    1.0.3-alpha parallelus/customizer-remove-all-parts
  * @copyright  Parallelus, Andy Wilkerson, Jesse Petersen
  * @license    https://github.com/parallelus/customizer-remove-all-parts/blob/master/LICENSE GPLv2
+ *
+ * @psalm-import-type HookActiveState from \Ecocide\Contracts\Modules\Module
  */
-class Module implements \Ecocide\Contracts\Modules\Module
+class Module extends BaseModule
 {
-    const EVENT_PREFIX = 'ecocide/modules/disable_customizer/';
+    public const HOOK_PREFIX = BaseModule::HOOK_PREFIX . 'disable_customizer/';
 
     /**
-     * A reference to an instance of this class.
+     * {@inheritdoc}
      *
-     * @var static
-     */
-    private static $instance;
-
-    /**
-     * Boots the module.
-     *
-     * @access public
-     * @param  array $args {
-     *     An array of optional arguments to customize the module.
+     * @param  array $options {
+     *     An associative array of options to customize the module.
      *
      *     @type array $hooks TODO: Define customizable hooks.
      * }
      * @return void
      */
-    public function boot( array $args = [] ) : void
+    public function boot( array $options = [] ) : void
     {
         add_action( 'admin_init', [ $this, 'admin_init' ], 10 );
 
@@ -44,7 +40,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
     /**
      * Remove customize capability
      *
-     * @listens WP#action:init
+     * @listens action:init
      *
      * @return void
      */
@@ -57,7 +53,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
     /**
      * Run all of our plugin stuff on admin init.
      *
-     * @listens WP#action:admin_init
+     * @listens action:admin_init
      *
      * @return void
      */
@@ -76,7 +72,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * This needs to be in public so the admin bar link for 'customize' is hidden.
      *
-     * @listens WP#filter:map_meta_cap
+     * @listens filter:map_meta_cap
      *
      * @param  array  $caps Returns the user's actual capabilities.
      * @param  string $cap  Capability name.
@@ -94,7 +90,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
     /**
      * Manually overriding specific Customizer behaviors.
      *
-     * @listens WP#action:load-{$pagenow}
+     * @listens action:load-{$pagenow}
      *
      * @return void
      */
@@ -102,35 +98,5 @@ class Module implements \Ecocide\Contracts\Modules\Module
     {
         // If accessed directly
         wp_die( __( 'The Customizer is currently disabled.', 'ecocide' ) );
-    }
-
-    /**
-     * Returns the instance of the module.
-     *
-     * @access public
-     * @return static
-     */
-    public static function get_instance()
-    {
-        // If the single instance hasn't been set, set it now.
-        if ( null === static::$instance ) {
-            static::$instance = new static;
-        }
-
-        return static::$instance;
-    }
-
-    /**
-     * Calls the requested method from the module.
-     *
-     * @param  string  $method The method to ne called.
-     * @param  array   $args   Zero or more parameters to be passed to the method.
-     * @return mixed
-     */
-    public static function __callStatic( $method, $args )
-    {
-        $instance = static::get_instance();
-
-        return $instance ? $instance->$method( ...$args ) : null;
     }
 }

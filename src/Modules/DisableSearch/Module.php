@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ecocide\Modules\DisableSearch;
 
+use Ecocide\Module;
 use WP_Admin_Bar;
 use WP_Query;
 
@@ -20,30 +21,24 @@ use WP_Query;
  * @version    1.8.0 coffee2code/disable-search
  * @copyright  Scott Reilly
  * @license    https://github.com/coffee2code/disable-search/blob/master/LICENSE GPLv2
+ *
+ * @psalm-import-type HookActiveState from \Ecocide\Contracts\Modules\Module
  */
-class Module implements \Ecocide\Contracts\Modules\Module
+class Module extends BaseModule
 {
-    const EVENT_PREFIX = 'ecocide/modules/disable_search/';
+    public const HOOK_PREFIX = BaseModule::HOOK_PREFIX . 'disable_search/';
 
     /**
-     * A reference to an instance of this class.
+     * {@inheritdoc}
      *
-     * @var static
-     */
-    private static $instance;
-
-    /**
-     * Boots the module.
-     *
-     * @access public
-     * @param  array $args {
-     *     An array of optional arguments to customize the module.
+     * @param  array $options {
+     *     An associative array of options to customize the module.
      *
      *     @type array $hooks TODO: Define customizable hooks.
      * }
      * @return void
      */
-    public function boot( array $args = [] ) : void
+    public function boot( array $options = [] ) : void
     {
         if ( ! is_admin() ) {
             add_action( 'parse_query', [ $this, 'parse_query' ], 5 );
@@ -111,35 +106,5 @@ class Module implements \Ecocide\Contracts\Modules\Module
     public function admin_bar_menu( WP_Admin_Bar $wp_admin_bar ) : void
     {
         $wp_admin_bar->remove_menu( 'search' );
-    }
-
-    /**
-     * Returns the instance of the module.
-     *
-     * @access public
-     * @return static
-     */
-    public static function get_instance()
-    {
-        // If the single instance hasn't been set, set it now.
-        if ( null === static::$instance ) {
-            static::$instance = new static;
-        }
-
-        return static::$instance;
-    }
-
-    /**
-     * Calls the requested method from the module.
-     *
-     * @param  string  $method The method to ne called.
-     * @param  array   $args   Zero or more parameters to be passed to the method.
-     * @return mixed
-     */
-    public static function __callStatic( $method, $args )
-    {
-        $instance = static::get_instance();
-
-        return $instance ? $instance->$method( ...$args ) : null;
     }
 }

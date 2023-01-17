@@ -4,32 +4,28 @@ declare(strict_types=1);
 
 namespace Ecocide\Modules\DisablePostFormat;
 
+use Ecocide\Module;
+
 /**
  * Disable WordPress Post Formats
+ *
+ * @psalm-import-type HookActiveState from \Ecocide\Contracts\Modules\Module
  */
-class Module implements \Ecocide\Contracts\Modules\Module
+class Module extends BaseModule
 {
-    const EVENT_PREFIX = 'ecocide/modules/disable_post_format/';
+    public const HOOK_PREFIX = BaseModule::HOOK_PREFIX . 'disable_post_format/';
 
     /**
-     * A reference to an instance of this class.
+     * {@inheritdoc}
      *
-     * @var static
-     */
-    private static $instance;
-
-    /**
-     * Boots the module.
-     *
-     * @access public
-     * @param  array $args {
-     *     An array of optional arguments to customize the module.
+     * @param  array $options {
+     *     An associative array of options to customize the module.
      *
      *     @type array $hooks TODO: Define customizable hooks.
      * }
      * @return void
      */
-    public function boot( array $args = [] ) : void
+    public function boot( array $options = [] ) : void
     {
         remove_filter( 'request', '_post_format_request' );
 
@@ -47,7 +43,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
     /**
      * Disables public access, querying, and UI to the 'post_format' taxonomy.
      *
-     * @listens WP#filter:register_taxonomy_args
+     * @listens filter:register_taxonomy_args
      *
      * @param  array  $args      Array of arguments for registering a taxonomy.
      * @param  string $post_type Taxonomy key.
@@ -70,7 +66,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see wp-settings.php
      *
-     * @listens WP#action:wp_loaded
+     * @listens action:wp_loaded
      *
      * @return void
      */
@@ -91,42 +87,12 @@ class Module implements \Ecocide\Contracts\Modules\Module
      *
      * @see wp-settings.php
      *
-     * @listens WP#action:wp_loaded
+     * @listens action:wp_loaded
      *
      * @return void
      */
     public function filter_theme_support() : void
     {
         remove_theme_support( 'post-formats' );
-    }
-
-    /**
-     * Returns the instance of the module.
-     *
-     * @access public
-     * @return static
-     */
-    public static function get_instance()
-    {
-        // If the single instance hasn't been set, set it now.
-        if ( null === static::$instance ) {
-            static::$instance = new static;
-        }
-
-        return static::$instance;
-    }
-
-    /**
-     * Calls the requested method from the module.
-     *
-     * @param  string  $method The method to ne called.
-     * @param  array   $args   Zero or more parameters to be passed to the method.
-     * @return mixed
-     */
-    public static function __callStatic( $method, $args )
-    {
-        $instance = static::get_instance();
-
-        return $instance ? $instance->$method( ...$args ) : null;
     }
 }

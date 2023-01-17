@@ -4,32 +4,28 @@ declare(strict_types=1);
 
 namespace Ecocide\Modules\DisableEmoji;
 
+use Ecocide\Module;
+
 /**
  * Disable WordPress emoji scripts and styles.
+ *
+ * @psalm-import-type HookActiveState from \Ecocide\Contracts\Modules\Module
  */
-class Module implements \Ecocide\Contracts\Modules\Module
+class Module extends BaseModule
 {
-    const EVENT_PREFIX = 'ecocide/modules/disable_emoji/';
+    public const HOOK_PREFIX = BaseModule::HOOK_PREFIX . 'disable_emoji/';
 
     /**
-     * A reference to an instance of this class.
+     * {@inheritdoc}
      *
-     * @var static
-     */
-    private static $instance;
-
-    /**
-     * Boots the module.
-     *
-     * @access public
-     * @param  array $args {
-     *     An array of optional arguments to customize the module.
+     * @param  array $options {
+     *     An associative array of options to customize the module.
      *
      *     @type array $hooks TODO: Define customizable hooks.
      * }
      * @return void
      */
-    public function boot( array $args = [] ) : void
+    public function boot( array $options = [] ) : void
     {
         remove_action( 'wp_head', 'print_emoji_detection_script', 7 );
 
@@ -46,35 +42,5 @@ class Module implements \Ecocide\Contracts\Modules\Module
         remove_filter( 'wp_mail', 'wp_staticize_emoji_for_email' );
 
         add_filter( 'emoji_svg_url', '__return_null' );
-    }
-
-    /**
-     * Returns the instance of the module.
-     *
-     * @access public
-     * @return static
-     */
-    public static function get_instance()
-    {
-        // If the single instance hasn't been set, set it now.
-        if ( null === static::$instance ) {
-            static::$instance = new static;
-        }
-
-        return static::$instance;
-    }
-
-    /**
-     * Calls the requested method from the module.
-     *
-     * @param  string  $method The method to ne called.
-     * @param  array   $args   Zero or more parameters to be passed to the method.
-     * @return mixed
-     */
-    public static function __callStatic( $method, $args )
-    {
-        $instance = static::get_instance();
-
-        return $instance ? $instance->$method( ...$args ) : null;
     }
 }
