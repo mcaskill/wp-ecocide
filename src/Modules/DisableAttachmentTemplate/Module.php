@@ -162,7 +162,7 @@ class Module implements \Ecocide\Contracts\Modules\Module
             $post_name_check ||
             in_array( $slug, $feeds ) ||
             'embed' === $slug ||
-            preg_match( "@^({$wp_rewrite->pagination_base})?\d+$@", $slug ) ||
+            ( is_string( $slug ) && preg_match( "@^({$wp_rewrite->pagination_base})?\d+$@", $slug ) ) ||
             apply_filters( 'wp_unique_post_slug_is_bad_hierarchical_slug', false, $slug, $post_type, $post_parent )
         ) {
             $suffix = 2;
