@@ -30,7 +30,7 @@ class Modules
         $class = 'Ecocide\\Modules\\' . $name . '\\Module';
 
         if ( ! class_exists( $class ) ) {
-            $path = __DIR__ . 'Modules/' . $name . '/Module.php';
+            $path = __DIR__ . '/Modules/' . $name . '/Module.php';
 
             if ( ! file_exists( $path ) ) {
                 throw new UnknownModuleException( $id );
